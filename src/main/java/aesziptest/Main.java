@@ -1,50 +1,34 @@
 package aesziptest;
 
-import de.idyl.winzipaes.AesZipFileDecrypter;
-import de.idyl.winzipaes.AesZipFileEncrypter;
-import de.idyl.winzipaes.impl.AESDecrypterBC;
-import de.idyl.winzipaes.impl.AESEncrypterBC;
-import de.idyl.winzipaes.impl.ExtZipEntry;
-
 import java.io.*;
-import java.util.zip.DataFormatException;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 
 
 public class Main {
-    public static void main(String[] args) throws IOException, DataFormatException {
+    public static void main(String[] args) throws Exception {
         String currentDir = System.getProperty("user.dir");
         File resDir = new File(currentDir, "res");
         File backupZip = new File(resDir, "backup.zip");
 
-        createEncryptedDataZip(resDir, new File(resDir, "data.zip"), "12345678");
-        createZip(resDir, backupZip);
-        extractZip(backupZip, resDir, "12345678");
+        File encryptedFile = encryptFile(new File(resDir, "file"), new File(resDir, "file_encrypted"), "12345678");
+
+        File[] files = {encryptedFile, new File(resDir, "metadata.json")};
+        createZip(files, backupZip);
+
+        File backupDir = new File(resDir, "backup_extracted");
+        extractZip(backupZip, backupDir);
+
+        decryptFile(new File(backupDir, "file_encrypted"), new File(backupDir, "file_decrypted"),"12345678");
     }
 
-    private static void extractZip(File backupZip, File resDir, String password) throws IOException, DataFormatException {
-        File backupDir = new File(resDir, "backup_extracted");
+    private static void extractZip(File backupZip, File backupDir) throws IOException {
         if (backupDir.exists()) {
             backupDir.delete();
         }
         backupDir.mkdir();
 
-        extractZip(backupZip, backupDir);
-        extractAndDecryptZip(new File(backupDir, "data.zip"), backupDir, password);
-    }
-
-    private static void extractAndDecryptZip(File encrptedDataZip, File backupDir, String password) throws IOException, DataFormatException {
-        AesZipFileDecrypter decrypter = new AesZipFileDecrypter(encrptedDataZip, new AESDecrypterBC());
-        for (ExtZipEntry extZipEntry : decrypter.getEntryList()) {
-            decrypter.extractEntry(extZipEntry, new File(backupDir, extZipEntry.getName().substring(extZipEntry.getName().lastIndexOf("/") + 1)), password);
-        }
-        decrypter.close();
-        encrptedDataZip.delete();
-    }
-
-    private static void extractZip(File backupZip, File backupDir) throws IOException {
         ZipInputStream zis = new ZipInputStream(new FileInputStream(backupZip));
         ZipEntry entry;
         while ((entry = zis.getNextEntry()) != null) {
@@ -65,25 +49,21 @@ public class Main {
         zis.close();
     }
 
-    private static void createZip(File resDir, File backupZip) throws IOException {
+    private static void createZip(File[] files, File backupZip) throws IOException {
 
         if (backupZip.exists()) {
             backupZip.delete();
         }
 
-        File metadata = new File(resDir, "metadata.json");
-        File encryptedDataZip = new File(resDir, "data.zip");
-
         ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(backupZip));
         zos.setLevel(ZipOutputStream.STORED);
         try {
-            addZipEntry(zos, metadata);
-            addZipEntry(zos, encryptedDataZip);
+            for (File file : files) {
+                addZipEntry(zos, file);
+            }
         } finally {
             zos.close();
         }
-
-        encryptedDataZip.delete();
     }
 
     private static void addZipEntry(ZipOutputStream zos, File fileEntry) throws IOException {
@@ -100,22 +80,44 @@ public class Main {
         zos.closeEntry();
     }
 
-    public static void createEncryptedDataZip(File resDir, File encryptedDataZip, String password) throws IOException {
-        if (encryptedDataZip.exists()) {
-            encryptedDataZip.delete();
+    public static File encryptFile(File file, File encryptedFile, String password) throws Exception {
+        if (encryptedFile.exists()) {
+            encryptedFile.delete();
         }
 
-        FileFilter filter = new FileFilter() {
-            @Override
-            public boolean accept(File file) {
-                return file.isFile() && file.getName().startsWith("file");
-            }
-        };
-
-        AesZipFileEncrypter encrypter = new AesZipFileEncrypter(encryptedDataZip, new AESEncrypterBC());
-        for (File file : resDir.listFiles(filter)) {
-            encrypter.add(file, password);
+        FileInputStream in = new FileInputStream(file);
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        byte[] buffer = new byte[1024];
+        int count;
+        while ((count = in.read(buffer)) != -1) {
+            baos.write(buffer, 0, count);
         }
-        encrypter.close();
+        in.close();
+        byte[] bytes = baos.toByteArray();
+
+        byte[] encryptedBytes = CryptoJSON.encrypt(bytes, password, "text/plain");
+        FileOutputStream out = new FileOutputStream(encryptedFile);
+        out.write(encryptedBytes);
+        out.close();
+
+        return encryptedFile;
+    }
+
+    private static void decryptFile(File encryptedFile, File decryptedFile, String password) throws Exception {
+        FileInputStream in = new FileInputStream(encryptedFile);
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        byte[] buffer = new byte[1024];
+        int count;
+        while ((count = in.read(buffer)) != -1) {
+            baos.write(buffer, 0, count);
+        }
+        in.close();
+        byte[] bytes = baos.toByteArray();
+
+        byte[] decryptedBytes = CryptoJSON.decrypt(bytes, password, "text/plain");
+
+        FileOutputStream out = new FileOutputStream(decryptedFile);
+        out.write(decryptedBytes);
+        out.close();
     }
 }
