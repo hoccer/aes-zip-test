@@ -1,0 +1,17 @@
+.project
+.settings
+.idea
+out
+build.log
+build-log.xml
+**/*.iml
+*.iml
+**/.project
+**/.settings
+**/.classpath
+**/bin
+**/gen
+**/target
+**/run
+**/git_properties
+**/.DS_Store
