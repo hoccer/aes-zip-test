@@ -1,5 +1,7 @@
 package aesziptest;
 
+import org.apache.commons.io.FileUtils;
+
 import java.io.*;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -7,27 +9,34 @@ import java.util.zip.ZipOutputStream;
 
 
 public class Main {
+
     public static void main(String[] args) throws Exception {
+
         String currentDir = System.getProperty("user.dir");
-        File resDir = new File(currentDir, "res");
-        File backupZip = new File(resDir, "backup.zip");
 
-        File encryptedFile = encryptFile(new File(resDir, "file"), new File(resDir, "file_encrypted"), "12345678");
+        File resourceDir = new File(currentDir, "res");
+        File targetDir = new File(resourceDir, "target");
+        File backupZip = new File(targetDir, "backup.zip");
+        File backupDir = new File(targetDir, "backup_extracted");
 
-        File[] files = {encryptedFile, new File(resDir, "metadata.json")};
+        if (targetDir.exists()) {
+            FileUtils.deleteDirectory(targetDir);
+        }
+
+        targetDir.mkdir();
+        backupDir.mkdir();
+
+        String password = "12345678";
+
+        File encryptedFile = encryptFile(new File(resourceDir, "file"), new File(targetDir, "file_encrypted"), password);
+        File[] files = {encryptedFile, new File(resourceDir, "metadata.json")};
+
         createZip(files, backupZip);
-
-        File backupDir = new File(resDir, "backup_extracted");
         extractZip(backupZip, backupDir);
-
-        decryptFile(new File(backupDir, "file_encrypted"), new File(backupDir, "file_decrypted"),"12345678");
+        decryptFile(new File(backupDir, "file_encrypted"), new File(backupDir, "file_decrypted"), password);
     }
 
     private static void extractZip(File backupZip, File backupDir) throws IOException {
-        if (backupDir.exists()) {
-            backupDir.delete();
-        }
-        backupDir.mkdir();
 
         ZipInputStream zis = new ZipInputStream(new FileInputStream(backupZip));
         ZipEntry entry;
@@ -51,10 +60,6 @@ public class Main {
 
     private static void createZip(File[] files, File backupZip) throws IOException {
 
-        if (backupZip.exists()) {
-            backupZip.delete();
-        }
-
         ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(backupZip));
         zos.setLevel(ZipOutputStream.STORED);
         try {
@@ -67,6 +72,7 @@ public class Main {
     }
 
     private static void addZipEntry(ZipOutputStream zos, File fileEntry) throws IOException {
+
         FileInputStream in = new FileInputStream(fileEntry);
         ZipEntry entry = new ZipEntry(fileEntry.getName());
         zos.putNextEntry(entry);
@@ -81,9 +87,6 @@ public class Main {
     }
 
     public static File encryptFile(File file, File encryptedFile, String password) throws Exception {
-        if (encryptedFile.exists()) {
-            encryptedFile.delete();
-        }
 
         FileInputStream in = new FileInputStream(file);
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -104,6 +107,7 @@ public class Main {
     }
 
     private static void decryptFile(File encryptedFile, File decryptedFile, String password) throws Exception {
+
         FileInputStream in = new FileInputStream(encryptedFile);
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         byte[] buffer = new byte[1024];
